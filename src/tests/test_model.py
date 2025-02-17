@@ -1,43 +1,41 @@
 import re
-import string
 import pickle
-from tensorflow.keras.preprocessing.text import Tokenizer
-from tensorflow.keras.preprocessing.sequence import pad_sequences
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
-from nltk.stem import WordNetLemmatizer
 import argparse
 import nltk
-import joblib  # Pour charger le modèle sauvegardé
-
-import re
 from nltk.tokenize import word_tokenize
 from nltk.stem import WordNetLemmatizer
-import nltk
+from keras.models import load_model
+from tensorflow.keras.preprocessing.sequence import pad_sequences
 
-# Télécharger les ressources nécessaires (à exécuter une seule fois)
-nltk.download('punkt')
-nltk.download('wordnet')
+# Download necessary resources
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
 
-# Initialisation globale des stopwords et lemmatizer
-# stop_words = set(stopwords.words('english'))
+try:
+    nltk.data.find('corpora/wordnet')
+except LookupError:
+    nltk.download('wordnet')
+
+# Global initialization of lemmatizer
 wordlem = WordNetLemmatizer()
 
-# Fonction pour retirer les stopwords et effectuer un prétraitement complet
+# Function to remove stopwords and perform complete preprocessing
 def process_comment(comment):
-    # Convertir en minuscule
+    # Convert to lowercase
     comment = comment.lower()
 
-    # Supprimer les balises HTML
+    # Remove HTML tags
     comment = re.sub(r'<.*?>', '', comment)
     
-    # Garder uniquement les lettres et les espaces
+    # Keep only letters and spaces
     comment = re.sub(r'[^a-z\s]', '', comment)
 
-    # Supprimer les espaces multiples
+    # Remove multiple spaces
     comment = re.sub(r'\s+', ' ', comment).strip()
 
-    # Tokeniser le texte
+    # Tokenize the text
     tokens = word_tokenize(comment)
 
     # Lemmatization
@@ -46,47 +44,49 @@ def process_comment(comment):
     return ' '.join(final_tokens)
 
 
-# Fonction de prétraitement et tokenisation
+# Function for preprocessing and tokenization
 def preprocess_text(text, tokenizer, max_length):
-    text_cleaned = process_comment(text)  # Nettoyage
-    sequence = tokenizer.texts_to_sequences([text_cleaned])  # Conversion en séquence numérique
+    text_cleaned = process_comment(text)  # Cleaning
+    sequence = tokenizer.texts_to_sequences([text_cleaned])  # Convert to numerical sequence
     padded_sequence = pad_sequences(sequence, maxlen=max_length, padding='post', truncating='post')  # Padding
     return padded_sequence
 
-# # Fonction principale pour tester le modèle
-# def main(args):
-#     # Charger le tokenizer sauvegardé
-#     with open(args.tokenizer_path, 'rb') as f:
-#         tokenizer = pickle.load(f)
-
-#     # Charger le modèle sauvegardé
-#     model = joblib.load(args.model_path)
-
-#     # Prétraiter le commentaire fourni
-#     preprocessed_comment = preprocess_text(args.comment, tokenizer, args.max_length)
-
-#     # Faire la prédiction
-#     prediction = model.predict(preprocessed_comment)[0][0]  # [0][0] pour extraire la valeur
-#     toxicity = "Toxic" if prediction > 0.5 else "Non-Toxic"
-
-#     # Afficher le résultat
-#     print(f"Comment: {args.comment}")
-#     print(f"Predicted Toxicity: {toxicity} (Score: {prediction:.2f})")
-
+# Main function to test the model
 def main(args):
-    # Charger le tokenizer sauvegardé
-    print(args.tokenizer_path)
-    print(args.model_path)
-    print(args.max_length)
-    print(args.comment)
+    # Load the saved tokenizer
+    with open(args.tokenizer_path, 'rb') as f:
+        tokenizer = pickle.load(f)
+
+    # Load the saved model
+    model = load_model(args.model_path)
+
+    # Preprocess the provided comment
+    preprocessed_comment = preprocess_text(args.comment, tokenizer, args.max_length)
+
+    # Make a prediction
+    prediction = model.predict(preprocessed_comment)[0][0]  # [0][0] to extract the value
+    toxicity = "Non-Toxic"
+    if prediction > 0.8:
+        toxicity = "Highly Toxic"
+    elif prediction > 0.6:
+        toxicity = "Toxic"
+    elif prediction > 0.4:
+        toxicity = "Slightly Toxic"
+
+    # Display the result
+    print(f"Comment: {args.comment}")
+    print(f"Predicted Toxicity: {toxicity} (Score: {prediction:.2f})")
+
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Test d'un modèle de classification de toxicité.")
-    parser.add_argument("--comment", type=str, required=True, help="Commentaire à tester.")
-    parser.add_argument("--tokenizer_path", type=str, required=True, help="Chemin vers le tokenizer sauvegardé.")
-    parser.add_argument("--model_path", type=str, required=True, help="Chemin vers le modèle sauvegardé.")
-    parser.add_argument("--max_length", type=int, default=100, help="Longueur maximale des séquences (par défaut: 100).")
+    parser = argparse.ArgumentParser(description="Test a toxicity classification model.")
+    parser.add_argument("--comment", type=str, required=True, help="Comment to test.")
+    parser.add_argument("--tokenizer_path", type=str, required=False, default="src/tokenizer.pickle", help="Path to the saved tokenizer.")
+    parser.add_argument("--model_path", type=str, required=False, default="src/model/toxicity_model_0.keras", help="Path to the saved model.")
+    parser.add_argument("--max_length", type=int, default=100, help="Maximum sequence length (default: 100).")
     args = parser.parse_args()
 
     main(args)
 
+# Use the following command to run the test
+# python src/tests/test_model.py --comment "I hate you" --tokenizer_path src/tokenizer.pickle --model_path src/model/toxicity_model_0.keras
